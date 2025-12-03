@@ -1,0 +1,19 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Article {
+  id              Int       @id @default(autoincrement())
+  url             String
+  title           String
+  summary         String
+  keywords        String[]
+  tone            String
+  isPolitical     Boolean
+  politicalTopics String[]
+  createdAt       DateTime  @default(now())
+}

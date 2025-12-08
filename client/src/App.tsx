@@ -10,7 +10,12 @@ type Article = {
   tone: string;
   isPolitical: boolean;
   politicalTopics: string[];
-  createdAt: string; // ISO string from API
+  createdAt: string;
+};
+
+type ApiError = {
+  error?: string;
+  errorCode?: string;
 };
 
 function toneToClass(tone: string): string {
@@ -31,6 +36,10 @@ function App() {
   const [history, setHistory] = useState<Article[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualText, setManualText] = useState("");
+  const [manualLoading, setManualLoading] = useState(false);
+
   async function loadHistory() {
     try {
       setError(null);
@@ -48,19 +57,61 @@ function App() {
     setError(null);
     setLoading(true);
     setData(null);
+    setShowManualInput(false); // reset manual UI on new attempt
 
     try {
       const res = await axios.post<Article>("http://localhost:4000/summarize", {
         url,
       });
       setData(res.data);
-      // Optionally refresh history after a successful save
       loadHistory();
     } catch (err: any) {
       console.error(err);
-      setError(err?.response?.data?.error || "Something went wrong");
+
+      const apiErr: ApiError | undefined = err?.response?.data;
+      const msg =
+        apiErr?.error || err?.message || "Something went wrong summarizing.";
+
+      setError(msg || null);
+
+      // If scraping is blocked or failed, offer the paste-text fallback
+      if (
+        apiErr?.errorCode === "EXTRACT_FAILED" ||
+        apiErr?.errorCode === "FETCH_FORBIDDEN"
+      ) {
+        setShowManualInput(true);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSummarizeText = async () => {
+    setError(null);
+    setManualLoading(true);
+    setData(null);
+
+    try {
+      const res = await axios.post<Article>(
+        "http://localhost:4000/summarize-text",
+        {
+          text: manualText,
+          title: "",
+          url,
+        }
+      );
+      setData(res.data);
+      loadHistory();
+    } catch (err: any) {
+      console.error(err);
+      const apiErr: ApiError | undefined = err?.response?.data;
+      setError(
+        apiErr?.error ||
+          err?.message ||
+          "Something went wrong summarizing the pasted text."
+      );
+    } finally {
+      setManualLoading(false);
     }
   };
 
@@ -70,7 +121,8 @@ function App() {
         <h1 className="app-title">Briefly</h1>
         <p className="app-subtitle">
           Paste an article URL to get an AI-generated summary, tone, and topical
-          tags.
+          tags. If a site blocks automated access, you can paste the text
+          instead.
         </p>
       </header>
 
@@ -107,6 +159,34 @@ function App() {
               </button>
             </div>
           </form>
+
+          {showManualInput && (
+            <div style={{ marginTop: "1.25rem" }}>
+              <p className="muted">
+                This site is hard to read automatically. If you like, copy and
+                paste the article text below and I&apos;ll summarize that
+                instead.
+              </p>
+              <textarea
+                rows={8}
+                className="url-input"
+                style={{ fontFamily: "monospace", marginTop: "0.5rem" }}
+                placeholder="Paste the article text here..."
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+              />
+              <div className="btn-row" style={{ marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  disabled={manualLoading || manualText.trim().length < 50}
+                  onClick={handleSummarizeText}
+                >
+                  {manualLoading ? "Summarizing..." : "Summarize pasted text"}
+                </button>
+              </div>
+            </div>
+          )}
 
           {data && (
             <div style={{ marginTop: "1.25rem" }}>

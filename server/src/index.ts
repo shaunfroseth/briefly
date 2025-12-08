@@ -24,19 +24,15 @@ app.post("/summarize", async (req, res) => {
   }
 
   try {
-    // 1) Fetch and extract article text
     const { title, content } = await extractArticleFromUrl(url);
 
-    // 2) (Optional) limit content length to keep token usage sane
     const maxChars = 8000;
     const trimmedContent =
       content.length > maxChars ? content.slice(0, maxChars) : content;
 
-    // 3) Send to OpenAI for summarization
     const { summary, keywords, tone, is_political, political_topics } =
       await summarizeArticle(trimmedContent);
 
-    // 4) Return to client
     const saved = await saveArticle({
       url,
       title,
@@ -50,8 +46,66 @@ app.post("/summarize", async (req, res) => {
     return res.json(saved);
   } catch (err: any) {
     console.error("Error in /summarize:", err);
+
+    const msg = String(err.message || "");
+
+    // Couldn’t extract readable content (Readability + fallbacks failed)
+    if (msg.includes("Could not extract readable article content")) {
+      return res.status(400).json({
+        errorCode: "EXTRACT_FAILED",
+        error:
+          "I couldn't reliably extract the article text from this page. Some journal or PDF-style pages are tricky.",
+      });
+    }
+
+    // Fetch blocked / forbidden
+    if (msg.includes("Failed to fetch URL: 403")) {
+      return res.status(400).json({
+        errorCode: "FETCH_FORBIDDEN",
+        error:
+          "This site is blocking automated access. You can open it normally in your browser but I can't read it directly.",
+      });
+    }
+
     return res.status(500).json({
-      error: err?.message || "Failed to summarize article",
+      errorCode: "UNKNOWN",
+      error: "Something went wrong while summarizing this article.",
+    });
+  }
+});
+
+app.post("/summarize-text", async (req, res) => {
+  const { text, title, url } = req.body;
+
+  if (!text || typeof text !== "string" || text.trim().length < 50) {
+    return res.status(400).json({
+      error: "Please provide at least a few sentences of text to summarize.",
+    });
+  }
+
+  try {
+    const maxChars = 8000;
+    const trimmedContent =
+      text.length > maxChars ? text.slice(0, maxChars) : text;
+
+    const { summary, keywords, tone, is_political, political_topics } =
+      await summarizeArticle(trimmedContent);
+
+    const saved = await saveArticle({
+      url: url || "manual-input",
+      title: title || "Pasted article",
+      summary,
+      keywords,
+      tone,
+      isPolitical: is_political,
+      politicalTopics: political_topics,
+    });
+
+    return res.json(saved);
+  } catch (err) {
+    console.error("Error in /summarize-text:", err);
+    return res.status(500).json({
+      error: "Something went wrong while summarizing the pasted text.",
     });
   }
 });

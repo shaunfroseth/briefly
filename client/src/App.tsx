@@ -57,7 +57,7 @@ function App() {
     setError(null);
     setLoading(true);
     setData(null);
-    setShowManualInput(false); // reset manual UI on new attempt
+    setShowManualInput(false);
 
     try {
       const res = await axios.post<Article>("http://localhost:4000/summarize", {
@@ -74,7 +74,6 @@ function App() {
 
       setError(msg || null);
 
-      // If scraping is blocked or failed, offer the paste-text fallback
       if (
         apiErr?.errorCode === "EXTRACT_FAILED" ||
         apiErr?.errorCode === "FETCH_FORBIDDEN"
@@ -115,22 +114,32 @@ function App() {
     }
   };
 
+  const handleHistoryClick = (article: Article) => {
+    setData(article);
+    setUrl(article.url === "manual-input" ? "" : article.url);
+    setShowManualInput(false);
+    setManualText("");
+  };
+
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1 className="app-title">Briefly</h1>
-        <p className="app-subtitle">
-          Paste an article URL to get an AI-generated summary, tone, and topical
-          tags. If a site blocks automated access, you can paste the text
-          instead.
-        </p>
+        <div className="logo-mark">B</div>
+        <div>
+          <h1 className="app-title">Briefly</h1>
+          <p className="app-subtitle">
+            Paste an article URL to get an AI-generated summary, tone, and
+            topical tags. If a site blocks automated access, you can paste the
+            text instead.
+          </p>
+        </div>
       </header>
 
       {error && <p className="error-text">{error}</p>}
 
       <main className="app-grid">
         {/* Left: input + latest summary */}
-        <section className="card">
+        <section className={`card ${data ? "card--active" : ""}`}>
           <div className="card-header">
             <div>
               <h2 className="card-title">New summary</h2>
@@ -152,7 +161,9 @@ function App() {
             <div className="btn-row">
               <button
                 type="submit"
-                className="button button-primary"
+                className={`button button-primary ${
+                  loading ? "button--loading" : ""
+                }`}
                 disabled={loading}
               >
                 {loading ? "Summarizing..." : "Summarize article"}
@@ -243,7 +254,8 @@ function App() {
             <div>
               <h2 className="card-title">History</h2>
               <p className="card-subtitle">
-                Recently summarized articles, newest first.
+                Recently summarized articles, newest first. Click one to reopen
+                it.
               </p>
             </div>
             <button
@@ -268,7 +280,11 @@ function App() {
           {history.length > 0 && (
             <ul className="history-list">
               {history.map((h) => (
-                <li className="history-item" key={h.id}>
+                <li
+                  className="history-item"
+                  key={h.id}
+                  onClick={() => handleHistoryClick(h)}
+                >
                   <div className="history-item-title">{h.title}</div>
                   <div className="history-item-meta">
                     {new Date(h.createdAt).toLocaleString()} ·{" "}

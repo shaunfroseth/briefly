@@ -32,18 +32,43 @@ body {
   padding: 2.5rem 1.5rem 3rem;
 }
 
+/* Make header feel more like a brand bar */
 .app-header {
   margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start; /* was center */
+  gap: 0.85rem;
+}
+
+/* Simple circular logo "dot" (works great with a B initial) */
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #38bdf8, #2563eb 55%, #1e293b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.7);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e5e7eb;
+  margin-top: 10px; /* new line */
 }
 
 .app-title {
+  margin: 0; /* add this */
   font-size: 2.25rem;
   font-weight: 650;
   letter-spacing: 0.02em;
+  background: linear-gradient(to right, #e5e7eb, #93c5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .app-subtitle {
-  margin-top: 0.25rem;
+  margin-top: 0.2rem; /* slightly tighter */
   color: #9ca3af;
 }
 
@@ -55,6 +80,31 @@ body {
 @media (min-width: 900px) {
   .app-grid {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr);
+  }
+}
+
+/* Animations */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes subtleGlow {
+  0% {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 24px 55px rgba(37, 99, 235, 0.3);
+  }
+  100% {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -70,6 +120,12 @@ body {
   );
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
   padding: 1.25rem 1.5rem 1.5rem;
+  animation: fadeInUp 240ms ease-out;
+}
+
+/* When a card is actively showing a result, give it a gentle glow */
+.card.card--active {
+  animation: fadeInUp 240ms ease-out, subtleGlow 3s ease-in-out infinite;
 }
 
 .card-header {
@@ -144,6 +200,24 @@ body {
   background-color: #1d4ed8;
   transform: translateY(-1px);
   box-shadow: 0 14px 30px rgba(37, 99, 235, 0.65);
+}
+
+/* Extra loading state styling for primary button */
+.button-primary.button--loading {
+  position: relative;
+}
+
+.button-primary.button--loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at 10% 0%,
+    rgba(248, 250, 252, 0.12),
+    transparent 60%
+  );
+  opacity: 0.9;
 }
 
 .button-secondary {
@@ -263,6 +337,15 @@ body {
   border-radius: 0.6rem;
   border: 1px solid rgba(31, 41, 55, 0.95);
   background-color: rgba(15, 23, 42, 0.9);
+  transition: transform 120ms ease, border-color 120ms ease,
+    background-color 120ms ease;
+  cursor: pointer;
+}
+
+.history-item:hover {
+  transform: translateY(-1px);
+  border-color: #2563eb;
+  background-color: rgba(15, 23, 42, 1);
 }
 
 .history-item-title {

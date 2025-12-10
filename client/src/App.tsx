@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { RecipeSkeleton } from "./components/RecipeSkeleton";
+import { API_BASE } from "./config";
 
 type Recipe = {
   id: number;
@@ -17,8 +18,6 @@ type ApiError = {
   error?: string;
   errorCode?: string;
 };
-
-const API_BASE = "http://localhost:4000";
 
 function normalizeRecipe(raw: any): Recipe {
   return {

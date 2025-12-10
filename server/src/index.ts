@@ -11,14 +11,11 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 const MAX_RECIPE_CHARS = 24000;
 
-// Allow the frontend to talk to this API
+const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173", // Vite dev
-      // add your deployed frontend origin here, e.g.:
-      // "https://briefly-recipes.vercel.app",
-    ],
+    origin: [FRONTEND_ORIGIN, "http://localhost:5173"],
     methods: ["GET", "POST", "OPTIONS"],
   })
 );

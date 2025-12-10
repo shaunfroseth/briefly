@@ -6,14 +6,13 @@ datasource db {
   provider = "postgresql"
 }
 
-model Article {
-  id              Int       @id @default(autoincrement())
-  url             String
-  title           String
-  summary         String
-  keywords        String[]
-  tone            String
-  isPolitical     Boolean
-  politicalTopics String[]
-  createdAt       DateTime  @default(now())
+model Recipe {
+  id          Int      @id @default(autoincrement())
+  url         String
+  title       String
+  servings    String?   // e.g. "Serves 4", optional
+  totalTime   String?   // e.g. "45 minutes", optional
+  ingredients Json      // stores an array of Ingredient objects
+  steps       Json      // stores an array of step strings
+  createdAt   DateTime @default(now())
 }

@@ -1,5 +1,7 @@
+// server/src/services/scraper.ts
 import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
+import fs from "fs";
+import path from "path";
 
 export type ExtractedArticle = {
   title: string;
@@ -25,46 +27,87 @@ export async function extractArticleFromUrl(
   }
 
   const html = await res.text();
-
   const dom = new JSDOM(html, { url });
   const doc = dom.window.document;
 
-  // ---- 1) Try Readability first
-  const reader = new Readability(doc);
-  const article = reader.parse();
+  // Basic title – just use the page title, AI will refine if needed
+  const title =
+    doc.querySelector("title")?.textContent?.trim() || "Untitled page";
 
-  let title =
-    article?.title ||
-    doc.querySelector("title")?.textContent ||
-    "Untitled article";
-  let content = (article?.textContent || "").trim();
+  // -------------------------------------------
+  // Full-page structured extraction (preferred)
+  // -------------------------------------------
 
-  // ---- 2) Fallback: manually grab paragraph text if Readability fails or is very short
-  if (!content || content.length < 800) {
-    console.log("Fallback: manual paragraph extraction for", url);
-    const paragraphNodes = Array.from(
-      doc.querySelectorAll(
-        "article p, main p, [role='main'] p, .content p, .article-body p, body p"
-      )
-    );
+  // Collect text from regions likely to contain recipe details
+  const selectors = [
+    "article",
+    "main",
+    '[class*="recipe"]',
+    '[id*="recipe"]',
+    ".content",
+    ".entry-content",
+    ".post",
+    ".post-content",
+    ".recipe-card",
+    ".wprm-recipe-container", // very common recipe plugin
+    ".tasty-recipes", // another common recipe plugin
+    ".instructions",
+    ".ingredients",
+  ];
 
-    console.log(`Found ${paragraphNodes.length} paragraph nodes`);
+  const collected: string[] = [];
 
-    const paragraphText = paragraphNodes
+  selectors.forEach((sel) => {
+    doc.querySelectorAll(sel).forEach((el) => {
+      const text = el.textContent?.trim();
+      if (text && text.length > 0) {
+        collected.push(text);
+      }
+    });
+  });
+
+  // Combine unique chunks
+  let content = Array.from(new Set(collected)).join("\n\n").trim();
+
+  // Final fallback: all <p> tags if selectors didn't give us anything useful
+  if (!content) {
+    const paragraphs = Array.from(doc.querySelectorAll("p"))
       .map((p) => p.textContent?.trim() || "")
       .filter((t) => t.length > 0);
 
-    const joined = paragraphText.join("\n\n").trim();
-
-    if (joined.length > content.length) {
-      content = joined;
-    }
+    content = paragraphs.join("\n\n").trim();
   }
 
-  // ---- 3) Final sanity check
-  if (!content || content.split(/\s+/).length < 50) {
-    // still basically empty
+  // If we truly have nothing, bail
+  if (!content) {
     throw new Error("Could not extract readable article content");
+  }
+
+  // Debug: Write extracted content to a temporary .txt file
+  try {
+    const debugDir = path.join(process.cwd(), "debug-output");
+    if (!fs.existsSync(debugDir)) {
+      fs.mkdirSync(debugDir);
+    }
+
+    const fileName = `extracted_${Date.now()}.txt`;
+    const filePath = path.join(debugDir, fileName);
+
+    const debugText = [
+      `URL: ${url}`,
+      `TITLE: ${title}`,
+      "",
+      "================ EXTRACTED CONTENT ================",
+      "",
+      content,
+      "",
+      "====================================================",
+    ].join("\n");
+
+    fs.writeFileSync(filePath, debugText, "utf-8");
+    console.log(`📝 Extracted content saved to: debug-output/${fileName}`);
+  } catch (err) {
+    console.error("Failed to write debug extraction file:", err);
   }
 
   return { title, content };

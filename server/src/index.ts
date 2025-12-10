@@ -1,126 +1,192 @@
+// server/src/index.ts
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 
-import { summarizeArticle } from "./services/ai";
 import { extractArticleFromUrl } from "./services/scraper";
-import { saveArticle, getRecentArticles } from "./services/db";
+import { extractRecipe } from "./services/ai";
+import { saveRecipe, getRecentRecipes } from "./services/db";
 
 const app = express();
+const PORT = process.env.PORT || 4000;
+const MAX_RECIPE_CHARS = 24000;
 
-app.use(cors());
+// Allow the frontend to talk to this API
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173", // Vite dev
+      // add your deployed frontend origin here, e.g.:
+      // "https://briefly-recipes.vercel.app",
+    ],
+    methods: ["GET", "POST", "OPTIONS"],
+  })
+);
+
 app.use(express.json());
 
+// Simple health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+/**
+ * Focus on the part of the page that actually looks like a recipe.
+ * We try to start near the first "Ingredients" heading and keep up to
+ * MAX_RECIPE_CHARS characters from there.
+ */
+function focusOnRecipeSection(full: string): string {
+  const lower = full.toLowerCase();
+
+  const markers = ["ingredients", "ingredient"];
+  let idx = -1;
+
+  // Find the first occurrence of "ingredients"
+  for (const m of markers) {
+    const pos = lower.indexOf(m);
+    if (pos !== -1 && (idx === -1 || pos < idx)) {
+      idx = pos;
+    }
+  }
+
+  if (idx !== -1) {
+    const start = Math.max(0, idx - 500); // a bit of context above the heading
+    // 👇 IMPORTANT: no artificial cap, keep everything to the end
+    return full.slice(start);
+  }
+
+  // Fallback: if we can't find "ingredients", you can still cap for safety
+  if (full.length > MAX_RECIPE_CHARS) {
+    return full.slice(full.length - MAX_RECIPE_CHARS);
+  }
+
+  return full;
+}
+
+/**
+ * POST /summarize
+ *
+ * Body: { url: string }
+ *
+ * For a recipe URL, this:
+ *  - fetches the page
+ *  - extracts main text
+ *  - runs extractRecipe(content)
+ *  - saves the recipe
+ *  - returns the saved recipe row
+ */
 app.post("/summarize", async (req, res) => {
-  const { url } = req.body;
+  const { url } = req.body as { url?: string };
 
   if (!url) {
     return res.status(400).json({ error: "URL is required" });
   }
 
   try {
-    const { title, content } = await extractArticleFromUrl(url);
+    const { content } = await extractArticleFromUrl(url);
 
-    const maxChars = 8000;
-    const trimmedContent =
-      content.length > maxChars ? content.slice(0, maxChars) : content;
+    const trimmedContent = focusOnRecipeSection(content);
+    const recipe = await extractRecipe(trimmedContent);
 
-    const { summary, keywords, tone, is_political, political_topics } =
-      await summarizeArticle(trimmedContent);
+    if (!recipe.isRecipe) {
+      return res.status(400).json({
+        errorCode: "NOT_A_RECIPE",
+        error:
+          "This page doesn't look like a cooking recipe. Try another link.",
+      });
+    }
 
-    const saved = await saveArticle({
-      url,
-      title,
-      summary,
-      keywords,
-      tone,
-      isPolitical: is_political,
-      politicalTopics: political_topics,
-    });
-
+    const saved = await saveRecipe(url, recipe);
     return res.json(saved);
   } catch (err: any) {
     console.error("Error in /summarize:", err);
+    const msg = String(err?.message || "");
 
-    const msg = String(err.message || "");
-
-    // Couldn’t extract readable content (Readability + fallbacks failed)
     if (msg.includes("Could not extract readable article content")) {
       return res.status(400).json({
         errorCode: "EXTRACT_FAILED",
         error:
-          "I couldn't reliably extract the article text from this page. Some journal or PDF-style pages are tricky.",
+          "I couldn't reliably extract the recipe from this page. Some sites are heavily scripted or use unusual layouts.",
       });
     }
 
-    // Fetch blocked / forbidden
     if (msg.includes("Failed to fetch URL: 403")) {
       return res.status(400).json({
         errorCode: "FETCH_FORBIDDEN",
         error:
-          "This site is blocking automated access. You can open it normally in your browser but I can't read it directly.",
+          "This site is blocking automated access. You can open it in your browser, but I can't read it directly.",
       });
     }
 
     return res.status(500).json({
       errorCode: "UNKNOWN",
-      error: "Something went wrong while summarizing this article.",
+      error: "Something went wrong while extracting the recipe.",
     });
   }
 });
 
+/**
+ * POST /summarize-text
+ *
+ * Body: { text: string; title?: string; url?: string }
+ *
+ * For when the site blocks scraping: user pastes the recipe text manually.
+ */
 app.post("/summarize-text", async (req, res) => {
-  const { text, title, url } = req.body;
+  const { text, title, url } = req.body as {
+    text?: string;
+    title?: string;
+    url?: string;
+  };
 
   if (!text || typeof text !== "string" || text.trim().length < 50) {
     return res.status(400).json({
-      error: "Please provide at least a few sentences of text to summarize.",
+      error: "Please provide at least a few sentences of recipe text.",
     });
   }
 
   try {
-    const maxChars = 8000;
-    const trimmedContent =
-      text.length > maxChars ? text.slice(0, maxChars) : text;
+    const trimmedContent = focusOnRecipeSection(text);
+    const recipe = await extractRecipe(trimmedContent);
 
-    const { summary, keywords, tone, is_political, political_topics } =
-      await summarizeArticle(trimmedContent);
+    if (!recipe.isRecipe) {
+      return res.status(400).json({
+        errorCode: "NOT_A_RECIPE",
+        error:
+          "The text you pasted doesn't look like a cooking recipe. Make sure you include ingredients and steps.",
+      });
+    }
 
-    const saved = await saveArticle({
-      url: url || "manual-input",
-      title: title || "Pasted article",
-      summary,
-      keywords,
-      tone,
-      isPolitical: is_political,
-      politicalTopics: political_topics,
-    });
+    if (title && title.trim()) {
+      recipe.title = title.trim();
+    }
 
+    const saved = await saveRecipe(url || "manual-input", recipe);
     return res.json(saved);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Error in /summarize-text:", err);
+
     return res.status(500).json({
-      error: "Something went wrong while summarizing the pasted text.",
+      error: "Something went wrong while summarizing the pasted recipe.",
     });
   }
 });
 
+/**
+ * GET /history
+ *
+ * Returns the most recent recipes, newest first.
+ */
 app.get("/history", async (_req, res) => {
   try {
-    const articles = await getRecentArticles(50);
-    res.json(articles);
+    const recipes = await getRecentRecipes(20);
+    res.json(recipes);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch history" });
+    console.error("Error in /history:", err);
+    res.status(500).json({ error: "Failed to load recipe history." });
   }
 });
 
-const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });

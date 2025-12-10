@@ -1,36 +1,50 @@
+// server/src/services/db.ts
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type Recipe } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import type { RecipeExtractionResult } from "./ai";
 
 // Create a pg connection pool using the DATABASE_URL from .env
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Wrap the pool in Prisma's Postgres adapter
+// Wrap the pool in Prisma's Postgres adapter (required pattern in Prisma 7)
 const adapter = new PrismaPg(pool);
 
-// Instantiate PrismaClient with the adapter (required in Prisma 7)
+// Instantiate PrismaClient with the adapter
 export const prisma = new PrismaClient({
   adapter,
 });
 
-// Convenience helpers
-export async function saveArticle(data: {
-  url: string;
-  title: string;
-  summary: string;
-  keywords: string[];
-  tone: string;
-  isPolitical: boolean;
-  politicalTopics: string[];
-}) {
-  return prisma.article.create({ data });
+/**
+ * Save a recipe extracted from a URL into the database.
+ * We ignore the `isRecipe` flag for storage; the route should check that before calling this.
+ */
+export async function saveRecipe(
+  url: string,
+  recipe: RecipeExtractionResult
+): Promise<Recipe> {
+  const { title, servings, totalTime, ingredients, steps } = recipe;
+
+  return prisma.recipe.create({
+    data: {
+      url,
+      title: title || "Untitled recipe",
+      servings: servings || null,
+      totalTime: totalTime || null,
+      ingredients, // stored as Json
+      steps, // stored as Json
+    },
+  });
 }
 
-export async function getRecentArticles(limit: number = 20) {
-  return prisma.article.findMany({
+/**
+ * Get recent recipes, newest first.
+ */
+export async function getRecentRecipes(limit: number = 20): Promise<Recipe[]> {
+  return prisma.recipe.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
   });

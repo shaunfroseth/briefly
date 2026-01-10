@@ -1,178 +1,165 @@
-# 📘 Briefly – AI-Powered Article Summarizer
+# 🍳 Briefly Recipes
 
-**Briefly** is a full-stack web application that extracts article content from any URL, analyzes it using OpenAI, and produces a clean summary with tone detection, keyword extraction, and political-context classification.
+**Briefly Recipes** is a full-stack web application that extracts the _actual_ useful parts of online cooking recipes — ingredients with measurements and step-by-step instructions — and strips away ads, popups, and long-winded blog content.
 
-It includes robust error handling for sites that block scraping and provides a **“paste text instead”** fallback, making it reliable across a wide range of content.
-
-This project demonstrates:
-
-- Full-stack development (React + TypeScript + Express)
-- AI integration (OpenAI API)
-- Web scraping & content extraction
-- Database persistence (PostgreSQL + Prisma)
-- Error handling & real-world scraping edge cases
-- Modern responsive UI
-- Clean code structure suitable for production-scale expansion
+Paste a recipe URL, and Briefly gives you a clean, readable recipe you can actually cook from.
 
 ---
 
-## 🚀 Features
+## ✨ Features
 
-### 🔗 URL Summarization
-
-- Fetches article HTML using server-side scraping
-- Extracts readable content using Mozilla Readability + custom fallbacks
-- Sends text to OpenAI for structured analysis:
-  - 📝 Summary
-  - 🎯 Keywords
-  - 🎭 Tone
-  - 🏛️ Political classification (leaning + topics)
-
-### 🧠 AI-Generated Insight
-
-Uses OpenAI function-calling to guarantee structured output.
-
-### 📜 Summary History
-
-- Stores every summary in PostgreSQL
-- Displays all previous summaries, newest first
-
-### ⚠️ Advanced Error Handling
-
-Sites often block bots or load articles via JavaScript. Briefly handles this by:
-
-- Detecting extraction failures
-- Detecting 403 forbidden scrapes
-- Showing helpful messages
-- Automatically offering a **“paste text instead”** option
-
-### ⌨️ Manual Text Summarization
-
-If extraction fails, users can paste article text directly.
+- 🧾 Extracts **ingredients with measurements**
+- 🪜 Generates **step-by-step cooking instructions**
+- 🔗 Accepts recipe URLs from popular cooking sites
+- ✂️ Removes ads, SEO fluff, and personal blog content
+- 📜 Stores recent extracted recipes
+- 🧠 Uses AI to normalize messy recipe formats
+- 🌙 Clean, dark-mode friendly UI
 
 ---
 
-## 📁 Tech Stack
+## 🏗️ Architecture
+
+| Layer       | Technology                     | Hosting |
+| ----------- | ------------------------------ | ------- |
+| Frontend    | React + TypeScript + Vite      | Vercel  |
+| Backend API | Node.js + Express + TypeScript | Render  |
+| Database    | PostgreSQL                     | Neon    |
+| ORM         | Prisma                         | —       |
+| AI          | OpenAI API                     | —       |
+
+---
+
+## 🌐 Live Deployment
+
+- **Frontend:** https://briefly-ruby.vercel.app/
+- **API:** https://briefly-api-786m.onrender.com
+
+> ⚠️ The API may take a few seconds to respond on first request due to Render free-tier cold starts.
+
+---
+
+## 🧠 How It Works
+
+1. User submits a recipe URL
+2. Backend fetches and scrapes the page HTML
+3. Relevant recipe content is extracted (ingredients + instructions)
+4. AI processes the content into a structured format
+5. Recipe is saved to the database
+6. Clean recipe is returned to the frontend
+
+If a site blocks scraping, users can manually paste recipe text instead.
+
+---
+
+## 🛠️ Tech Stack
 
 ### Frontend
 
-- React + TypeScript
+- React
+- TypeScript
 - Vite
-- Modern responsive UI
-- CSS custom styles
+- Axios
+- Custom CSS
 
 ### Backend
 
-- Node.js + Express
+- Node.js
+- Express
 - TypeScript
-- OpenAI integration
-- Content extraction via Readability + HTML fallbacks
-- Prisma ORM (Prisma 7 with `@prisma/adapter-pg`)
+- Prisma ORM
+- OpenAI API
+- JSDOM
 
 ### Database
 
-- PostgreSQL (Docker or external)
+- PostgreSQL (Neon)
 
 ---
 
-## 📦 Installation
+## 🚀 Running Locally
 
-### 1️⃣ Clone the repo
+### 1️⃣ Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/briefly.git
-cd briefly
+git clone https://github.com/your-username/briefly-recipes.git
+cd briefly-recipes
 ```
 
-### 2️⃣ Install and start the backend
+### 2️⃣ Backend setup
 
 ```bash
 cd server
 npm install
 ```
 
-Create `.env`:
-
-```env
-OPENAI_API_KEY=your-key
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
 ```
-
-Generate Prisma client & migrate DB:
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+OPENAI_API_KEY=your_openai_api_key
+```
 
 ```bash
 npx prisma migrate dev
-```
-
-Start server:
-
-```bash
 npm run dev
 ```
 
-### 3️⃣ Install and start the frontend
+Backend runs at `http://localhost:4000`
+
+### 3️⃣ Frontend setup
 
 ```bash
-cd ../client
+cd client
 npm install
+```
+
+`VITE_API_BASE_URL=http://localhost:4000`
+
+```bash
 npm run dev
 ```
+
+`Frontend runs at http://localhost:5173`
 
 ---
 
-## 🧠 API Routes
+## 🧪 API Endpoints
 
-### `POST /summarize`
-
-Input:
-
-```json
-{ "url": "https://example.com/article" }
-```
-
-### `POST /summarize-text`
-
-Input:
+### POST /summarize
 
 ```json
 {
-  "text": "Full article text",
-  "url": "optional-url",
-  "title": "optional title"
+  "url": "https://example.com/recipe"
 }
 ```
 
-### `GET /history`
+### POST /summarize-text
 
-Returns last 20 summaries.
-
----
-
-## 🛡️ Error Handling Strategy
-
-Real-world scraping is messy. Briefly accounts for:
-
-| Issue               | Example                  | Response            |
-| ------------------- | ------------------------ | ------------------- |
-| Bot-blocked (403)   | News sites               | Paste-text fallback |
-| No readable content | JS-only pages            | Fallback selectors  |
-| Fragmented content  | Academic journal layouts | Combined extraction |
-| Unreachable URL     | Network                  | Friendly error      |
-
----
-
-## 📐 System Architecture
-
-```
-Client (React)
-    ↓
-Express API (/summarize, /summarize-text, /history)
-    ↓
-Scraper (Readability + fallbacks)
-    ↓
-OpenAI (summary + tone + politics)
-    ↓
-PostgreSQL (Prisma)
+```json
+{
+  "text": "Ingredients...\nInstructions..."
+}
 ```
 
+### GET /history
+
+Returns the most recent extracted recipes
+
 ---
+
+## ⚠️ Known Limitations
+
+- Some sites block automated scraping
+- Very long or heavily scripted pages may fail extraction
+- Free-tier hosting may cause slow first requests
+- No user accounts yet
+
+---
+
+## 🧭 Future Improvements
+
+- User accounts & saved recipes
+- Ingredient scaling
+- Unit conversion (metric ↔ imperial)
+- Shopping list generation
+- Chrome extension
+- Mobile optimization
